@@ -1,0 +1,51 @@
+- unless @restrict_age
+  - if @movie.price.zero?
+    %a.butWatch#zeroPayButton{:href => "#", :rel => "#dialogueBox"}
+      = translation('Watch Now')
+  - else
+    - if @paypal_token
+      #payment_gateway
+        #paypal_ecdg
+          %a.ppWatch{ :href=>"#{Paypal.incontext_url @paypal_token}", :id=>"submitBtn"}
+            = image_tag("buyPayPal.png", :border => 0)
+          %span.price-in-dollars{:style => "font-size:10px;float:right;margin-top:-21px"}
+            = @movie.price_in_dollars
+          :javascript
+            var dg = new PAYPAL.apps.DGFlow({ trigger: "submitBtn", expType: 'light' });
+    - if @studio.facebook_credits_enabled?
+      - if @movie.is_bundle?
+        #bundlePassButton
+          = image_tag("pay-with-fb.png")
+          %span.price-in-credits{:style => "font-size:10px;float:right;margin-top:-23px"}
+            = @movie.price
+      - elsif @movie.serial?
+        #seriesPassButton
+          = image_tag("pay-with-fb.png")
+          %span.price-in-credits{:style => "font-size:10px;float:right;margin-top:-23px"}
+            = @movie.price
+      - else
+        %a.extra-options#payNormalButton{:href => "#"}
+          = image_tag("pay-with-fb.png")
+        %span.price-in-credits{:style => "font-size:10px;float:right;margin-top:-23px"}
+          = @movie.price
+    - if @studio.stripe_enabled?
+      #creditcard_det
+        %a{"data-keyboard"=>"true", "data-controls-modal"=>"modal-from-dom", "data-backdrop"=>"true", :href=>"#"}
+          = image_tag "buyCreditCard.png"
+        %span.price-in-dollars{:style => "font-size:10px;float:right;margin-top:-25px"}
+          = @movie.price_in_dollars
+    - if !@paypal_token && !@studio.stripe_enabled? && !@studio.facebook_credits_enabled
+      - if @movie.series
+        = (link_to "Buy Series", "#", :class => "butWatch", :id => "seriesPassButton", :rel => "#dialogueBox") if @movie.series.enable_series_pass
+      - if @movie.is_bundle
+        Buy this Bundle
+        #bundlePassButton
+          = image_tag("pay-with-fb.png")
+      - else
+        %a.extra-options#payButton{:href => "#", :rel => "#dialogueBox"}
+          -#= translation('Watch Now')
+          = image_tag("pay-with-fb.png")
+          %span.price-in-credits{:style => "font-size:10px;float:right;margin-top:-23px"}
+            = @movie.price
+- else
+  %h2#ageRestriction You are not old enough to view this movie

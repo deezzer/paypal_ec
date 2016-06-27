@@ -1,0 +1,156 @@
+- content_for(:head) do
+  / TODO: Fix the page height once FB fixes the FB.Canvas.setSize bug
+  :javascript
+    window.page_height = '1463px';
+
+= include_styles_for(@movie)
+= javascript_include_tag "https://www.paypalobjects.com/js/external/dg.js"
+= javascript_include_tag "vendor/jquery/bootstrap-modal", "vendor/jquery/jquery.validate.min"
+= stylesheet_link_tag "bootstrap"
+%script{:type=>"text/javascript", :src=>"https://js.stripe.com/v1/"}
+
+= require_facebook_login
+
+:css
+  .error{
+    font: 8px;
+    color: #ff0000;
+  }
+
+<!--[if IE]>
+:css
+  #vod-store-purchase {
+   height: 260px;
+   margin-top: 845px;
+  }
+<![endif]-->
+
+<![if !IE]>
+:css
+  #vod-store-purchase {
+    height: 260px;
+    margin-top: 845px;
+    position: absolute;
+    margin-left: -330px;
+  }
+<![endif]>
+
+
+.mainContainer
+  .content
+    = like_box_for(@movie)
+    = render('shared/bundle_items', :titles => @bundle.titles.sort{|a,b| a.position.nil? ? 1 : (b.position.nil? ? -1 : a.position <=> b.position)}) if @bundle
+    .module-menu
+      - if @movie.rental_badge
+        .rentalDurationBadge
+          %span.duration= @movie.badge_number
+          %span= @movie.badge_text
+          %span.more
+            = translation('Details Below')
+
+      .shareButtons
+        = tweet_button_for(@movie)
+        %a.butShare#facebookShareButton{:href => "#"}
+          = image_tag("post.png", :id => 'fb_post_button')
+        = like_button_for(@movie)
+          %div.text
+
+      = render :partial => 'movies/transactions'
+
+    - if @movie.vod_enabled?
+      = render :partial => 'shared/vod_store', :locals => {:purchase => true}
+
+  = render :partial => 'shared/movie_details_module', :locals => {:thing => @movie}
+= render :partial => 'shared/movie_footer', :locals => {:thing => @movie}
+
+
+:javascript
+  movie.paypal_enabled = "#{@studio.paypal_enabled?}"
+  var coupon_code = 'none';
+  var order_hash = {redeemed: true};
+  var vod_store = #{@movie.vod_enabled?};
+  var vod_store_link = "#{@movie.vod_store_link}";
+  var vod_store_element_id = "vod-store-purchase";
+  var movie = #{@movie.as_json.merge( :feed_dialog_desc => @movie.facebook_share_text  ).merge(:discount_key_link => @discount_key_link).merge(:discount_key => @discount_key, :expired => @expired, :viewing_party_complete => @viewing_party_complete).merge(@movie.skin.as_json).to_json };
+  var group_buy_enable = #{@group_buy_enable || "null"};
+  var series = #{@movie.series(true).as_json.to_json || "null"};
+
+  $(document).ready(function(){
+    if($.browser.msie) {
+      console.log("yooo");
+      $("#vod-store-purchase").css("position", "relative");
+      $("#vod-store-purchase").css("margin-left", "0px");
+    }
+    //Stripe API KEY
+    Stripe.setPublishableKey('pk_YonIw6qlD2SJVR72p7mA4p5M4eT9n');
+
+    $('#modal-from-dom').modal({
+      keyboard: true,
+      backdrop: true,
+      show: false
+    });
+    $("a#[data-controls-modal='modal-from-dom']").click(function(e) {
+      e.preventDefault();
+      $('#modal-from-dom').modal('show');
+    });
+
+    var select1 = $(".card-expiry-month");
+    select1.empty();
+    month = new Date().getMonth() + 1;
+    for (var i = 1; i <= 12; i++) {
+      select1.append($("<option value='"+i+"' "+(month === i ? "selected" : "")+">"+i+"</option>"));
+    }
+
+    var select = $(".card-expiry-year");
+    select.empty();
+    year = new Date().getFullYear();
+    for (var i = 0; i < 12; i++) {
+      select.append($("<option value='"+(i + year)+"' "+(i === 0 ? "selected" : "")+">"+(i + year)+"</option>"));
+    }
+
+    var urlLink = "/studios/#{params[:studio_id]}/movies/#{params[:id]}/credit_card";
+
+    $("#credit_detail_button").click(function(){
+      if($("#creditcard_form").valid()){
+        $("#credit_detail_button").attr("disabled", "disabled").attr("value", "Please Wait...").text("Please Wait...");
+        $(".payment-errors").empty();
+        $.ajax({
+          url: urlLink,
+          type: 'get',
+          data: $("#creditcard_form").serialize(),
+          success: function(data, status) {
+            $(".payment-errors").html(data);
+            $(':text', '#creditcard_form').val('');
+            window.location = movie.pathForSuccessfulPurchase(false);
+            window.location.assign(movie.pathForSuccessfulPurchase(false))
+          },
+          error: function(xhr, desc, err) {
+            //alert(xhr.status + " : " + xhr.responseText);
+          }
+        });
+      }
+      return false;
+    });
+
+    $("#creditcard_form").validate({
+      rules: {
+        "card-cvc" : {
+          cardCVC: true,
+          required: true
+        },
+        "card-number" : {
+          cardNumber: true,
+          required: true
+        },
+        "card-expiry-year" : "cardExpiry" // we don't validate month separately
+      }
+    });
+
+    jQuery.validator.addMethod("cardNumber", Stripe.validateCardNumber, "Please enter a valid card number");
+    jQuery.validator.addMethod("cardCVC", Stripe.validateCVC, "Please enter a valid security code");
+    jQuery.validator.addMethod("cardExpiry", function() {
+      return Stripe.validateExpiry($(".card-expiry-month").val(),
+      $(".card-expiry-year").val())
+    }, "Please enter a valid expiration");
+
+  });
